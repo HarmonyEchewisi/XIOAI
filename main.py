@@ -25,6 +25,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.scrollview import ScrollView
 import queue
+import re
 
 # =========================
 # Environment Setup
@@ -239,10 +240,10 @@ def listen():
             print(f"You: {text}")
             return text
         except sr.UnknownValueError:
-            print("Sorry, I did not understand that.")
+            print("Sorry, Xio did not understand that.")
             return None
         except sr.RequestError:
-            print("Sorry, my speech service is down.")
+            print("Sorry, Xio's speech service is down.")
             return None
 
 # =========================
@@ -280,7 +281,7 @@ def convert_time_to_text(time_string):
 
 class AIApp(App):
     """
-    Main Kivy application for the Xio AI assistant.
+    Main Kivy application for the Xio assistant.
     Handles UI, user input (text/voice), chat history, and LLM/speech orchestration.
     """
     def build(self):
@@ -308,6 +309,11 @@ class AIApp(App):
         self.input_widget = None
         self.send_button = None
         self.speak_button = None
+
+        # Add Change Mode button
+        self.change_mode_button = Button(text="Change Mode", size_hint=(1, 0.08))
+        self.change_mode_button.bind(on_press=self.change_mode)
+        self.layout.add_widget(self.change_mode_button)
 
         # For speech interruption and LLM cancellation
         self.is_speaking = False
@@ -360,11 +366,11 @@ class AIApp(App):
         if self.input_mode == "text":
             self.input_widget = TextInput(size_hint=(1, 0.1), multiline=False)
             self.layout.add_widget(self.input_widget)
-            self.send_button = Button(text="Send", size_hint=(1, 0.1))
+            self.send_button = Button(text="Send to Xio", size_hint=(1, 0.1))
             self.send_button.bind(on_press=self.send_message)
             self.layout.add_widget(self.send_button)
         elif self.input_mode == "voice":
-            self.speak_button = Button(text="Speak", size_hint=(1, 0.2))
+            self.speak_button = Button(text="Speak to Xio", size_hint=(1, 0.2))
             self.speak_button.bind(on_press=self.speak_message)
             self.layout.add_widget(self.speak_button)
         # else: do nothing
@@ -416,7 +422,7 @@ class AIApp(App):
 
     def speak_message(self, instance):
         """
-        Handle the Speak button: if AI is speaking, interrupt and start listening; otherwise, just start listening.
+        Handle the Speak to Xio button: if Xio is speaking, interrupt and start listening; otherwise, just start listening.
         """
         if self.is_speaking and self.synthesizer:
             self.interrupted = True
@@ -442,7 +448,7 @@ class AIApp(App):
             if user_input:
                 Clock.schedule_once(lambda dt: self.process_voice_input(user_input), 0)
             else:
-                Clock.schedule_once(lambda dt: self.update_chat_history("Sorry, I did not catch that. Please try again."), 0)
+                Clock.schedule_once(lambda dt: self.update_chat_history("Sorry, Xio did not catch that. Please try again."), 0)
         threading.Thread(target=recognize_and_send).start()
 
     def process_voice_input(self, user_input):
@@ -471,6 +477,36 @@ class AIApp(App):
                     threading.Thread(target=self.speak_and_auto_listen, args=(response,)).start()
             process_chat(self.agent_executor, user_input, self.chat_history, self.together_client, self.redis_client, callback=on_response, interrupted_ref=lambda: self.interrupted)
 
+    def clean_text_for_speech(self, text):
+        """
+        Clean up text for speech synthesis by removing code blocks, markdown, and common symbols.
+        Also expands common abbreviations to their full forms for natural speech.
+        """
+        # Remove triple backtick code blocks
+        text = re.sub(r'```[\s\S]*?```', '', text)
+        # Remove inline code
+        text = re.sub(r'`[^`]+`', '', text)
+        # Expand common abbreviations (do this before symbol removal)
+        abbr_map = {
+            r'\be\.g\.[,\.:;]?': 'for example',
+            r'\bi\.e\.[,\.:;]?': 'that is',
+            r'\betc\.[,\.:;]?': 'and so on',
+            r'\bvs\.[,\.:;]?': 'versus',
+            r'\bapprox\.[,\.:;]?': 'approximately',
+            r'\binfo\b': 'information',
+            r'\basap\b': 'as soon as possible',
+            r'\bbtw\b': 'by the way',
+        }
+        for abbr, full in abbr_map.items():
+            text = re.sub(abbr, full, text, flags=re.IGNORECASE)
+        # Remove markdown formatting symbols
+        text = re.sub(r'[\*_#>\[\]{}\(\)\-~]', '', text)
+        # Remove URLs
+        text = re.sub(r'http[s]?://\S+', '', text)
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
+
     def speak_and_auto_listen(self, text):
         """
         Speak the given text using Azure TTS, and in voice mode, auto-listen after speaking (unless interrupted).
@@ -482,7 +518,8 @@ class AIApp(App):
                                                    region=self.env_vars["AZURE_SPEECH_REGION"])
             audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
             self.synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
-            self.synthesizer.speak_text_async(text).get()
+            clean_text = self.clean_text_for_speech(text)
+            self.synthesizer.speak_text_async(clean_text).get()
             self.is_speaking = False
             self.synthesizer = None
             # If in voice mode, auto-listen after speaking, but only if not interrupted
@@ -490,6 +527,24 @@ class AIApp(App):
                 Clock.schedule_once(lambda dt: self.speak_message(None), 0)
         self.speech_thread = threading.Thread(target=do_speak)
         self.speech_thread.start()
+
+    def change_mode(self, instance):
+        """
+        Allow the user to return to the input mode selection popup.
+        Removes current input widgets and shows the mode selection popup again.
+        """
+        # Remove input widgets if present
+        if self.input_widget:
+            self.layout.remove_widget(self.input_widget)
+            self.input_widget = None
+        if self.send_button:
+            self.layout.remove_widget(self.send_button)
+            self.send_button = None
+        if self.speak_button:
+            self.layout.remove_widget(self.speak_button)
+            self.speak_button = None
+        self.input_mode = None
+        self.show_mode_selection_popup()
 
 if __name__ == "__main__":
     AIApp().run()

@@ -23,7 +23,7 @@ cd <repo-folder>
 ### 2. Create and Activate a Virtual Environment
 ```sh
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  
 ```
 
 ### 3. Install Dependencies
@@ -48,7 +48,7 @@ REDIS_TOKEN=your_upstash_redis_token
 
 ### 5. Platform-Specific Notes
 - **Windows:**
-  - You may need to install PyAudio from a pre-built wheel: https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+  - nstall `portaudio` via your package manager if you have issues with PyAudio.
 - **Linux/macOS:**
   - Install `portaudio` via your package manager if you have issues with PyAudio.
 
@@ -83,9 +83,9 @@ REDIS_TOKEN=your_upstash_redis_token
 MIT License
 
 ## Contact
-- **Author:** [Your Name]
-- **Email:** [your.email@example.com]
-- **LinkedIn:** [Your LinkedIn Profile]
+- **Author:** Harmony Echewisi
+- **Email:** Afrozorro@protonmail.com
+- **LinkedIn:** www.linkedin.com/in/harmonyechewisi
 
 ---
 
