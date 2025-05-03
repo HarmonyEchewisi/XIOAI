@@ -1,0 +1,9 @@
+kivy
+openai
+together
+azure-cognitiveservices-speech
+SpeechRecognition
+pyaudio
+langchain
+upstash-redis
+python-dotenv 
